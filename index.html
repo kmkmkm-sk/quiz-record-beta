@@ -8,37 +8,49 @@
   :root {
     --bg: #f5f6f8; --card: #ffffff; --text: #1f2933; --sub: #6b7280;
     --line: #d9dde3; --accent: #2563eb; --accent-text: #ffffff;
-    --chosen: #dbe7ff; --error: #c62828;
+    --chosen: #dbe7ff; --error: #c62828; --error-bg: #fdecea;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #15181d; --card: #1f242b; --text: #e8eaed; --sub: #9aa3ad;
       --line: #39414b; --accent: #5b8def; --accent-text: #ffffff;
-      --chosen: #263a5e; --error: #ff8a80;
+      --chosen: #263a5e; --error: #ff8a80; --error-bg: #3a2222;
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0; padding: 16px; background: var(--bg); color: var(--text);
     font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
     font-size: 18px; line-height: 1.5;
   }
   main { max-width: 640px; margin: 0 auto; }
-  h1 { font-size: 1.4rem; margin: 0 0 16px; }
+  h1 { font-size: 1.4rem; margin: 0; }
+  h2 { font-size: 1.15rem; margin: 0 0 4px; }
+  h3 { font-size: 1.05rem; margin: 20px 0 6px; }
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+  }
+  .user { display: flex; align-items: center; gap: 8px; color: var(--sub); font-size: 0.9rem; }
   .card {
     background: var(--card); border: 1px solid var(--line);
     border-radius: 12px; padding: 16px; margin-bottom: 16px;
   }
   label { display: block; font-weight: 600; margin: 14px 0 6px; }
   label:first-child { margin-top: 0; }
-  input, select {
+  input, select, textarea {
     width: 100%; font-size: 1.1rem; padding: 12px; min-height: 52px;
     border: 1px solid var(--line); border-radius: 10px;
-    background: var(--card); color: var(--text);
+    background: var(--card); color: var(--text); font-family: inherit;
   }
+  textarea { min-height: 140px; font-size: 1rem; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
   .scores {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 8px;
   }
+  .scores .hint { grid-column: 1 / -1; margin: 0; }
   .scores button {
     min-height: 56px; font-size: 1.3rem; font-weight: 600;
     border: 1px solid var(--line); border-radius: 10px;
@@ -53,111 +65,468 @@
     cursor: pointer;
   }
   .submit:active { transform: scale(0.98); }
+  .btn-sub {
+    font-size: 1rem; padding: 8px 16px; min-height: 44px; margin-top: 10px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); color: var(--text); cursor: pointer;
+  }
+  .user .btn-sub { margin-top: 0; }
   .msg { min-height: 1.5em; margin-top: 10px; color: var(--error); font-weight: 600; }
   .msg.ok { color: var(--accent); }
-  table { width: 100%; border-collapse: collapse; font-size: 1rem; }
+  .hint { color: var(--sub); font-size: 0.95rem; margin: 4px 0; }
+  .banner {
+    background: var(--error-bg); color: var(--error); border: 1px solid var(--error);
+    border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; font-weight: 600;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 1rem; margin-top: 8px; }
   th, td { padding: 10px 6px; border-bottom: 1px solid var(--line); text-align: left; }
   th { color: var(--sub); font-weight: 600; }
   td.num, th.num { text-align: right; }
+  tr.clickable { cursor: pointer; }
+  tr.current td { background: var(--chosen); }
+  td.state { color: var(--sub); font-size: 0.9rem; }
   .empty { color: var(--sub); text-align: center; padding: 16px 0; }
+  details summary { cursor: pointer; font-weight: 700; }
+  code.uid { display: block; word-break: break-all; padding: 8px; border: 1px dashed var(--line); border-radius: 8px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>小テスト 点数入力</h1>
+  <div class="topbar">
+    <h1>小テスト 点数入力</h1>
+    <div class="user" id="user-box" hidden>
+      <span id="user-email"></span>
+      <button type="button" class="btn-sub" id="logout">ログアウト</button>
+    </div>
+  </div>
 
-  <form class="card" id="form" novalidate>
-    <label for="date">日付</label>
-    <input type="date" id="date">
+  <div class="banner" id="banner" role="alert" hidden></div>
 
-    <label for="test">テスト名</label>
-    <input type="text" id="test" list="test-list" placeholder="例：確認テスト 第3回">
-    <datalist id="test-list">
-      <option value="確認テスト"></option>
-      <option value="単元テスト"></option>
-    </datalist>
+  <p class="hint" id="loading">読み込み中…</p>
 
-    <label for="student">生徒名</label>
-    <select id="student"></select>
-
-    <label>点数</label>
-    <div class="scores" id="scores"></div>
-
-    <button type="button" class="submit" id="submit">送信</button>
-    <div class="msg" id="msg" role="status"></div>
-  </form>
-
-  <section class="card">
-    <table>
-      <thead>
-        <tr><th>日付</th><th>テスト名</th><th>生徒名</th><th class="num">点数</th></tr>
-      </thead>
-      <tbody id="rows">
-        <tr><td colspan="4" class="empty">まだ記録がありません</td></tr>
-      </tbody>
-    </table>
+  <!-- ログイン前に表示する部分 -->
+  <section class="card" id="login-view" hidden>
+    <p>この画面を使うには、学校のGoogleアカウントでログインしてください。</p>
+    <button type="button" class="submit" id="login">Googleでログイン</button>
+    <div class="msg" id="login-msg" role="status"></div>
   </section>
+
+  <!-- ログイン後に表示する部分 -->
+  <div id="app-view" hidden>
+    <form class="card" id="form" novalidate>
+      <label for="test">テスト</label>
+      <select id="test"></select>
+
+      <label for="cls">クラス</label>
+      <select id="cls"></select>
+
+      <label for="student">生徒</label>
+      <select id="student"></select>
+
+      <label>点数</label>
+      <div class="scores" id="scores"></div>
+
+      <button type="button" class="submit" id="submit">送信</button>
+      <div class="msg" id="msg" role="status"></div>
+    </form>
+
+    <section class="card">
+      <h2 id="list-title">入力状況</h2>
+      <p class="hint" id="list-count"></p>
+      <table>
+        <thead>
+          <tr><th class="num">番号</th><th>生徒名</th><th class="num">点数</th><th>状態</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p class="hint">行を押すと、その生徒を選べます。</p>
+    </section>
+
+    <details class="card" id="setup">
+      <summary>準備（テストの回の追加・名簿の取り込み・UID）</summary>
+
+      <h3>テストの回を追加</h3>
+      <div class="row">
+        <div>
+          <label for="new-type">種類</label>
+          <select id="new-type">
+            <option value="kakunin">確認（0〜3点）</option>
+            <option value="unit">単元（0〜10点）</option>
+          </select>
+        </div>
+        <div>
+          <label for="new-number">何回目</label>
+          <input type="number" id="new-number" min="1" max="50" inputmode="numeric">
+        </div>
+      </div>
+      <button type="button" class="btn-sub" id="add-test">追加</button>
+      <div class="msg" id="test-msg" role="status"></div>
+
+      <h3>名簿の取り込み</h3>
+      <p class="hint">1行に1人、「クラス・出席番号・生徒名」の順で貼り付けます。スプレッドシートのB〜D列をコピーして、そのまま貼れます。同じ生徒は上書きされます。</p>
+      <textarea id="roster" placeholder="1組	1	生徒A&#10;1組	2	生徒B"></textarea>
+      <button type="button" class="btn-sub" id="import">取り込む</button>
+      <div class="msg" id="import-msg" role="status"></div>
+
+      <h3>あなたのUID</h3>
+      <p class="hint">Firestore のセキュリティルールに書き込む番号です。</p>
+      <code class="uid" id="uid"></code>
+      <button type="button" class="btn-sub" id="copy-uid">コピー</button>
+    </details>
+  </div>
 </main>
 
-<script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js";
+  import {
+    getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+  import {
+    getFirestore, collection, doc, setDoc, writeBatch,
+    query, where, onSnapshot, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+
   // ===== ここを書き換えると設定が変わります =====
-  const STUDENTS = ["生徒A", "生徒B", "生徒C"]; // 生徒名の候補
-  const MAX_SCORE = 10;                          // 点数の上限
+  const YEAR = 2026;                                   // 年度（名簿の絞り込みに使う）
+  const TERM = "2026-2";                               // 学期（テストの絞り込みに使う）
+  const CLASSES = ["1組", "2組", "3組", "4組", "5組"]; // クラス
   // ==========================================
 
+  // Firebase の接続先（パスワードではなく、プロジェクトの住所のようなもの）
+  const firebaseConfig = {
+    apiKey: "AIzaSyA_Tjg2SJh3u8Hq-X4D-I9pe2v237PD6HQ",
+    authDomain: "quiz-record-beta2026.firebaseapp.com",
+    projectId: "quiz-record-beta2026",
+    storageBucket: "quiz-record-beta2026.firebasestorage.app",
+    messagingSenderId: "709068441318",
+    appId: "1:709068441318:web:32b029dcd9d918e4675d27"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app); // データはこのページを開いている間だけPCに置く（閉じると消える）
+
   const $ = (id) => document.getElementById(id);
-  let selectedScore = null;
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-  // 日付の初期値を今日にする
-  const now = new Date();
-  $("date").value = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-    .toISOString().slice(0, 10);
+  let students = [];        // 名簿（この年度の全員）
+  let tests = [];           // テストの回（この学期）
+  let scoreMap = new Map(); // 生徒ID → 点数（選んでいるテスト×クラス）
+  let selectedScore = null; // 選んだ点数（数字 または "absent"）
+  let unsubs = [];          // 名簿・テストの見張りを止めるための関数
+  let unsubScores = null;   // 点数の見張りを止めるための関数
+  let listenKey = "";
+  let buttonsFor = null;
 
-  // 生徒の候補を作る
-  $("student").innerHTML = '<option value="">選んでください</option>' +
-    STUDENTS.map((s) => `<option value="${s}">${s}</option>`).join("");
+  // ========== 共通 ==========
+  function showMsg(id, text, ok = false) {
+    const el = $(id);
+    el.className = ok ? "msg ok" : "msg";
+    el.textContent = text;
+  }
+  function showBanner(text) { $("banner").textContent = text; $("banner").hidden = false; }
+  function hideBanner() { $("banner").hidden = true; }
+  function errText(e) {
+    if (e && e.code === "permission-denied") return "権限がありません。セキュリティルールを確認してください";
+    if (e && e.code === "unavailable") return "通信できません。ネットワークを確認してください";
+    return (e && (e.code || e.message)) || "不明なエラー";
+  }
+  function showReadError(e) {
+    if (e && e.code === "permission-denied") {
+      showBanner("データを読めません。Firestore のセキュリティルールに、あなたのUIDが設定されているか確認してください（UIDは下の「準備」にあります）。");
+      $("setup").open = true;
+    } else {
+      showBanner("データを読み込めませんでした：" + errText(e));
+    }
+  }
+  function fmt(r) { return r.status === "absent" ? "欠" : String(r.score); }
 
-  // 点数ボタン（0〜MAX_SCORE）を作る
-  for (let i = 0; i <= MAX_SCORE; i++) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = i;
-    b.setAttribute("aria-pressed", "false");
-    b.addEventListener("click", () => {
-      selectedScore = i;
-      document.querySelectorAll("#scores button")
-        .forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+  // ========== ログイン・ログアウト ==========
+  $("login").addEventListener("click", () => {
+    showMsg("login-msg", "");
+    signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => {
+      const map = {
+        "auth/popup-closed-by-user": "ログインを取り消しました",
+        "auth/cancelled-popup-request": "ログインを取り消しました",
+        "auth/popup-blocked": "ポップアップがブロックされました。ブラウザでこのページのポップアップを許可してください",
+        "auth/unauthorized-domain": "このページの住所（ドメイン）が Firebase に登録されていません。Authentication の「承認済みドメイン」に追加してください"
+      };
+      showMsg("login-msg", map[e.code] || "ログインできませんでした：" + (e.code || e.message));
     });
-    $("scores").appendChild(b);
+  });
+  $("logout").addEventListener("click", () => signOut(auth));
+
+  onAuthStateChanged(auth, (user) => {
+    $("loading").hidden = true;
+    stopListeners();
+    hideBanner();
+    if (user) {
+      $("login-view").hidden = true;
+      $("app-view").hidden = false;
+      $("user-box").hidden = false;
+      $("user-email").textContent = user.email || "";
+      $("uid").textContent = user.uid;
+      startListeners();
+    } else {
+      $("app-view").hidden = true;
+      $("user-box").hidden = true;
+      $("login-view").hidden = false;
+      students = []; tests = []; scoreMap = new Map();
+      $("rows").innerHTML = "";
+      $("uid").textContent = "";
+    }
+  });
+
+  // ========== データの見張り（変化があると自動で画面を更新） ==========
+  function startListeners() {
+    unsubs.push(onSnapshot(
+      query(collection(db, "students"), where("year", "==", YEAR)),
+      (snap) => {
+        students = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => a.className.localeCompare(b.className, "ja") || a.attendanceNo - b.attendanceNo);
+        renderStudents();
+        renderList();
+      },
+      showReadError
+    ));
+    unsubs.push(onSnapshot(
+      query(collection(db, "tests"), where("term", "==", TERM)),
+      (snap) => {
+        tests = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => a.type === b.type ? a.number - b.number : (a.type === "kakunin" ? -1 : 1));
+        renderTests();
+      },
+      showReadError
+    ));
   }
 
-  // 送信したとき
-  $("submit").addEventListener("click", (e) => {
-    e.preventDefault();
-    const date = $("date").value;
-    const test = $("test").value.trim();
-    const student = $("student").value;
-    const msg = $("msg");
-    msg.className = "msg";
+  function stopListeners() {
+    unsubs.forEach((u) => u());
+    unsubs = [];
+    if (unsubScores) { unsubScores(); unsubScores = null; }
+    listenKey = "";
+    buttonsFor = null;
+  }
 
-    if (!date) return (msg.textContent = "日付を入れてください");
-    if (!test) return (msg.textContent = "テスト名を入れてください");
-    if (!student) return (msg.textContent = "生徒名を選んでください");
-    if (selectedScore === null) return (msg.textContent = "点数を選んでください");
+  // 選んでいるテスト×クラスの点数だけを読む（全員分を読まずに済む）
+  function listenScores() {
+    if (unsubScores) { unsubScores(); unsubScores = null; }
+    scoreMap = new Map();
+    const testId = $("test").value;
+    const cls = $("cls").value;
+    if (!testId || !cls) return;
+    unsubScores = onSnapshot(
+      query(collection(db, "scores"), where("testId", "==", testId), where("className", "==", cls)),
+      { includeMetadataChanges: true },
+      (snap) => {
+        scoreMap = new Map(snap.docs.map((d) =>
+          [d.data().studentId, { ...d.data(), pending: d.metadata.hasPendingWrites }]));
+        renderList();
+      },
+      showReadError
+    );
+  }
 
-    const tbody = $("rows");
-    if (tbody.querySelector(".empty")) tbody.innerHTML = "";
-    const tr = document.createElement("tr");
-    [date, test, student, selectedScore].forEach((v, idx) => {
-      const td = document.createElement("td");
-      td.textContent = v;
-      if (idx === 3) td.className = "num";
-      tr.appendChild(td);
+  // ========== 入力画面 ==========
+  $("cls").innerHTML = CLASSES.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+
+  function currentTest() { return tests.find((t) => t.id === $("test").value); }
+  function classStudents() { return students.filter((s) => s.className === $("cls").value); }
+
+  function renderTests() {
+    const sel = $("test");
+    const keep = sel.value;
+    if (!tests.length) {
+      sel.innerHTML = '<option value="">（テストがありません。下の「準備」で追加）</option>';
+    } else {
+      sel.innerHTML = '<option value="">選んでください</option>' +
+        tests.map((t) => `<option value="${esc(t.id)}">${esc(t.label)}</option>`).join("");
+      if (tests.some((t) => t.id === keep)) sel.value = keep;
+    }
+    onSelectionChange();
+  }
+
+  function renderStudents() {
+    const sel = $("student");
+    const keep = sel.value;
+    const list = classStudents();
+    sel.innerHTML = '<option value="">選んでください</option>' +
+      list.map((s) => `<option value="${esc(s.id)}">${s.attendanceNo}番 ${esc(s.name)}</option>`).join("");
+    if (list.some((s) => s.id === keep)) sel.value = keep;
+  }
+
+  function renderScoreButtons() {
+    const t = currentTest();
+    const key = t ? `${t.id}:${t.maxScore}` : "";
+    if (key === buttonsFor) return;
+    buttonsFor = key;
+    selectedScore = null;
+    const box = $("scores");
+    box.innerHTML = "";
+    if (!t) {
+      box.innerHTML = '<p class="hint">テストを選ぶと表示されます</p>';
+      return;
+    }
+    const values = [...Array(t.maxScore + 1).keys(), "absent"];
+    values.forEach((v) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = v === "absent" ? "欠" : v;
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", () => selectScore(v, b));
+      box.appendChild(b);
     });
-    tbody.appendChild(tr);
+  }
 
-    msg.className = "msg ok";
-    msg.textContent = `${student}：${selectedScore}点 を追加しました`;
+  function selectScore(v, button) {
+    selectedScore = v;
+    document.querySelectorAll("#scores button")
+      .forEach((x) => x.setAttribute("aria-pressed", x === button ? "true" : "false"));
+  }
+
+  function onSelectionChange() {
+    renderScoreButtons();
+    const key = $("test").value + "|" + $("cls").value;
+    if (key !== listenKey) { listenKey = key; listenScores(); }
+    renderList();
+  }
+
+  $("test").addEventListener("change", onSelectionChange);
+  $("cls").addEventListener("change", () => { renderStudents(); onSelectionChange(); });
+  $("student").addEventListener("change", renderList);
+
+  // 送信：画面はすぐに更新し、保存はその裏で進める
+  $("submit").addEventListener("click", () => {
+    const t = currentTest();
+    const s = students.find((x) => x.id === $("student").value);
+    if (!t) return showMsg("msg", "テストを選んでください");
+    if (!s) return showMsg("msg", "生徒を選んでください");
+    if (selectedScore === null) return showMsg("msg", "点数を選んでください");
+
+    const absent = selectedScore === "absent";
+    const prev = scoreMap.get(s.id);
+    const data = {
+      studentId: s.id,
+      testId: t.id,
+      term: TERM,
+      className: s.className,
+      status: absent ? "absent" : "taken",
+      score: absent ? null : selectedScore,
+      updatedAt: serverTimestamp()
+    };
+
+    setDoc(doc(db, "scores", `${t.id}_${s.id}`), data).catch((e) => {
+      showMsg("msg", `${s.attendanceNo}番 ${s.name} の保存に失敗しました（${errText(e)}）。もう一度送信してください`);
+    });
+
+    const list = classStudents();
+    const i = list.findIndex((x) => x.id === s.id);
+    const isLast = i === list.length - 1;
+    showMsg("msg",
+      `${s.attendanceNo}番 ${s.name}：${absent ? "欠" : selectedScore + "点"}` +
+      (prev ? `（前は ${fmt(prev)}）` : "") +
+      (isLast ? "　この組の最後の生徒です" : ""),
+      true);
+
+    if (!isLast && i >= 0) $("student").value = list[i + 1].id;
+    selectScore(null, null);
+    renderList();
+  });
+
+  // ========== 入力状況の一覧 ==========
+  function renderList() {
+    const t = currentTest();
+    const cls = $("cls").value;
+    const tbody = $("rows");
+    if (!t) {
+      $("list-title").textContent = "入力状況";
+      $("list-count").textContent = "";
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">テストを選んでください</td></tr>';
+      return;
+    }
+    const list = classStudents();
+    $("list-title").textContent = `${t.label}・${cls} の入力状況`;
+    if (!list.length) {
+      $("list-count").textContent = "";
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">この組の名簿がありません（下の「準備」で取り込み）</td></tr>';
+      return;
+    }
+    const done = list.filter((s) => scoreMap.has(s.id)).length;
+    $("list-count").textContent = `入力済み ${done} / ${list.length}人`;
+    const cur = $("student").value;
+    tbody.innerHTML = list.map((s) => {
+      const r = scoreMap.get(s.id);
+      return `<tr class="clickable${s.id === cur ? " current" : ""}" data-id="${esc(s.id)}">` +
+        `<td class="num">${s.attendanceNo}</td>` +
+        `<td>${esc(s.name)}</td>` +
+        `<td class="num">${r ? fmt(r) : "—"}</td>` +
+        `<td class="state">${r && r.pending ? "保存中…" : ""}</td></tr>`;
+    }).join("");
+  }
+
+  $("rows").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-id]");
+    if (!tr) return;
+    $("student").value = tr.dataset.id;
+    renderList();
+  });
+
+  // ========== 準備：テストの回を追加 ==========
+  $("add-test").addEventListener("click", () => {
+    const type = $("new-type").value;
+    const n = Number($("new-number").value);
+    if (!Number.isInteger(n) || n < 1 || n > 50) return showMsg("test-msg", "何回目かを、1〜50の数字で入れてください");
+    const id = `${TERM}_${type}_${String(n).padStart(2, "0")}`;
+    if (tests.some((t) => t.id === id)) return showMsg("test-msg", "そのテストはすでにあります");
+    const label = type === "kakunin"
+      ? "確認" + (n <= 20 ? String.fromCharCode(0x245F + n) : n)  // 1→①、2→②…
+      : "単元" + n;
+    setDoc(doc(db, "tests", id), {
+      term: TERM, type, number: n, label, maxScore: type === "kakunin" ? 3 : 10
+    }).catch((e) => showMsg("test-msg", `${label} を追加できませんでした（${errText(e)}）`));
+    showMsg("test-msg", `${label} を追加しました`, true);
+    $("new-number").value = "";
+  });
+
+  // ========== 準備：名簿の取り込み ==========
+  $("import").addEventListener("click", () => {
+    const lines = $("roster").value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const rows = [];
+    const bad = [];
+    lines.forEach((line, i) => {
+      const [c = "", no = "", name = ""] = line.split(/\t|,/).map((x) => x.trim());
+      const cls = /^\d$/.test(c) ? c + "組" : c;
+      const num = Number(no);
+      if (!CLASSES.includes(cls) || !Number.isInteger(num) || num < 1 || num > 99 || !name) {
+        bad.push(i + 1);
+        return;
+      }
+      rows.push({
+        id: `${YEAR}_${parseInt(cls, 10) * 100 + num}`,
+        data: { year: YEAR, className: cls, attendanceNo: num, name }
+      });
+    });
+    if (!rows.length) return showMsg("import-msg", "取り込める行がありません。「クラス・出席番号・生徒名」の順か確認してください");
+    if (rows.length > 450) return showMsg("import-msg", "一度に取り込めるのは450人までです");
+
+    const batch = writeBatch(db);
+    rows.forEach((r) => batch.set(doc(db, "students", r.id), r.data));
+    batch.commit().catch((e) => showMsg("import-msg", `取り込みに失敗しました（${errText(e)}）`));
+
+    showMsg("import-msg",
+      `${rows.length}人を取り込みました` +
+      (bad.length ? `。読み取れなかった行：${bad.join("、")}行目（見出しの行なら問題ありません）` : ""),
+      true);
+    $("roster").value = "";
+  });
+
+  // ========== 準備：UIDのコピー ==========
+  $("copy-uid").addEventListener("click", () => {
+    navigator.clipboard.writeText($("uid").textContent).then(
+      () => { $("copy-uid").textContent = "コピーしました"; setTimeout(() => ($("copy-uid").textContent = "コピー"), 2000); },
+      () => { $("copy-uid").textContent = "コピーできませんでした。手で選択してください"; }
+    );
   });
 </script>
 </body>
