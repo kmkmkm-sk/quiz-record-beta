@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>小テスト入力</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1f2933; --sub: #6b7280;
+    --line: #d9dde3; --accent: #2563eb; --accent-text: #ffffff;
+    --chosen: #dbe7ff; --error: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15181d; --card: #1f242b; --text: #e8eaed; --sub: #9aa3ad;
+      --line: #39414b; --accent: #5b8def; --accent-text: #ffffff;
+      --chosen: #263a5e; --error: #ff8a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    font-size: 18px; line-height: 1.5;
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 16px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px; margin-bottom: 16px;
+  }
+  label { display: block; font-weight: 600; margin: 14px 0 6px; }
+  label:first-child { margin-top: 0; }
+  input, select {
+    width: 100%; font-size: 1.1rem; padding: 12px; min-height: 52px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); color: var(--text);
+  }
+  .scores {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 8px;
+  }
+  .scores button {
+    min-height: 56px; font-size: 1.3rem; font-weight: 600;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); color: var(--text); cursor: pointer;
+  }
+  .scores button[aria-pressed="true"] {
+    background: var(--chosen); border-color: var(--accent); outline: 2px solid var(--accent);
+  }
+  .submit {
+    width: 100%; margin-top: 20px; min-height: 64px; font-size: 1.3rem; font-weight: 700;
+    border: none; border-radius: 12px; background: var(--accent); color: var(--accent-text);
+    cursor: pointer;
+  }
+  .submit:active { transform: scale(0.98); }
+  .msg { min-height: 1.5em; margin-top: 10px; color: var(--error); font-weight: 600; }
+  .msg.ok { color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-size: 1rem; }
+  th, td { padding: 10px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+  th { color: var(--sub); font-weight: 600; }
+  td.num, th.num { text-align: right; }
+  .empty { color: var(--sub); text-align: center; padding: 16px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>小テスト 点数入力</h1>
+
+  <form class="card" id="form" novalidate>
+    <label for="date">日付</label>
+    <input type="date" id="date">
+
+    <label for="test">テスト名</label>
+    <input type="text" id="test" list="test-list" placeholder="例：確認テスト 第3回">
+    <datalist id="test-list">
+      <option value="確認テスト"></option>
+      <option value="単元テスト"></option>
+    </datalist>
+
+    <label for="student">生徒名</label>
+    <select id="student"></select>
+
+    <label>点数</label>
+    <div class="scores" id="scores"></div>
+
+    <button type="button" class="submit" id="submit">送信</button>
+    <div class="msg" id="msg" role="status"></div>
+  </form>
+
+  <section class="card">
+    <table>
+      <thead>
+        <tr><th>日付</th><th>テスト名</th><th>生徒名</th><th class="num">点数</th></tr>
+      </thead>
+      <tbody id="rows">
+        <tr><td colspan="4" class="empty">まだ記録がありません</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+  // ===== ここを書き換えると設定が変わります =====
+  const STUDENTS = ["生徒A", "生徒B", "生徒C"]; // 生徒名の候補
+  const MAX_SCORE = 10;                          // 点数の上限
+  // ==========================================
+
+  const $ = (id) => document.getElementById(id);
+  let selectedScore = null;
+
+  // 日付の初期値を今日にする
+  const now = new Date();
+  $("date").value = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 10);
+
+  // 生徒の候補を作る
+  $("student").innerHTML = '<option value="">選んでください</option>' +
+    STUDENTS.map((s) => `<option value="${s}">${s}</option>`).join("");
+
+  // 点数ボタン（0〜MAX_SCORE）を作る
+  for (let i = 0; i <= MAX_SCORE; i++) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = i;
+    b.setAttribute("aria-pressed", "false");
+    b.addEventListener("click", () => {
+      selectedScore = i;
+      document.querySelectorAll("#scores button")
+        .forEach((x) => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
+    });
+    $("scores").appendChild(b);
+  }
+
+  // 送信したとき
+  $("submit").addEventListener("click", (e) => {
+    e.preventDefault();
+    const date = $("date").value;
+    const test = $("test").value.trim();
+    const student = $("student").value;
+    const msg = $("msg");
+    msg.className = "msg";
+
+    if (!date) return (msg.textContent = "日付を入れてください");
+    if (!test) return (msg.textContent = "テスト名を入れてください");
+    if (!student) return (msg.textContent = "生徒名を選んでください");
+    if (selectedScore === null) return (msg.textContent = "点数を選んでください");
+
+    const tbody = $("rows");
+    if (tbody.querySelector(".empty")) tbody.innerHTML = "";
+    const tr = document.createElement("tr");
+    [date, test, student, selectedScore].forEach((v, idx) => {
+      const td = document.createElement("td");
+      td.textContent = v;
+      if (idx === 3) td.className = "num";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+
+    msg.className = "msg ok";
+    msg.textContent = `${student}：${selectedScore}点 を追加しました`;
+  });
+</script>
+</body>
+</html>
